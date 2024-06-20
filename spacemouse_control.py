@@ -2,6 +2,7 @@ import numpy as np
 from franky import Affine, CartesianMotion, Robot, ReferenceType
 from scipy.spatial.transform import Rotation as R
 from spacemouse import Spacemouse
+import time
 
 
 def activate(robot, duration=10):
