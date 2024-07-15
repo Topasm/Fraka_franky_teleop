@@ -5,43 +5,59 @@ from spacemouse import Spacemouse
 import time
 
 # Constants
-MOVE_INCREMENT = 0.1
+MOVE_INCREMENT = 0.0002
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
-DT = 0.01  # Loop interval in seconds
+DT = 0.002  # [s]
 
 # Initialize robot and gripper
 robot = franky.Robot("172.16.0.2")
 gripper = franky.Gripper("172.16.0.2")
 
-robot.relative_dynamics_factor = 0.1
-# robot.control_rate = 0.01  # Hz
+robot.relative_dynamics_factor = 0.12
+robot.velocity_rel = 0.2
+robot.acceleration_rel = 0.1
+robot.jerk_rel = 0.01
 robot.recover_from_errors()
+
+# Get initial pose
+initial_pose = robot.current_cartesian_state.pose.end_effector_pose
+initial_translation = np.array(initial_pose.translation)
+initial_rotation = np.array(initial_pose.quaternion)
+
+# Current pose starts as initial pose
+current_translation = initial_translation.copy()
+current_rotation = initial_rotation.copy()
+
+waypoints = []
 
 
 def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
-    current_pose = robot.current_cartesian_state.pose
-    end_effector_pose = current_pose.end_effector_pose  # Access the end_effector_pose
+    global current_translation, current_rotation
 
-    # print("Current end effector pose:")
-    # print("Translation:", end_effector_pose.translation)
-    # # Extract translation and rotation from end_effector_pose
-    translation = np.array(end_effector_pose.translation)
-    rotation = np.array(end_effector_pose.quaternion)
-
-    new_translation = translation + np.array([dx, dy, dz])
+    # Update current translation and rotation
+    current_translation += np.array([dx, dy, dz])
 
     if drot is not None:
-        current_rotation = R.from_quat(rotation)
         delta_rotation = R.from_euler('xyz', drot)
-        new_rotation = (delta_rotation * current_rotation).as_quat()
-    else:
-        new_rotation = rotation
+        current_rotation = (
+            delta_rotation * R.from_quat(current_rotation)).as_quat()
 
-    # Correctly format the translation and quaternion for Affine constructor
-    motion = franky.CartesianMotion(
-        franky.Affine(new_translation, new_rotation), franky.ReferenceType.Absolute)
-    robot.move(motion, asynchronous=True)
+    # Create the waypoint with the updated pose
+    affine = franky.Affine(current_translation, current_rotation)
+    waypoint = franky.CartesianWaypoint(franky.RobotPose(affine))
+    waypoints.append(waypoint)
+
+
+def execute_waypoints():
+    global waypoints
+    if waypoints:
+        # Create and execute CartesianWaypointMotion
+        motion = franky.CartesianWaypointMotion(waypoints)
+        success = robot.move(motion, asynchronous=True)
+        if not success:
+            robot.recover_from_errors()
+        waypoints = []  # Clear waypoints after execution
 
 
 def toggle_gripper_state():
@@ -102,6 +118,7 @@ with Spacemouse(deadzone=0.3) as sm:
         sm_state = sm.get_motion_state_transformed()
         dpos = sm_state[:3] * MOVE_INCREMENT
         drot_xyz = sm_state[3:] * MOVE_INCREMENT
+        print(f"Translation: {dpos}, Rotation: {drot_xyz}")
 
         if sm.is_button_pressed(0):
             toggle_gripper_state()
@@ -114,4 +131,11 @@ with Spacemouse(deadzone=0.3) as sm:
 
         move_robot(dpos[0], dpos[1], dpos[2], drot_xyz)
 
+        # Execute waypoints at a defined interval
+        if len(waypoints) >= 10:  # Adjust the threshold as needed
+            execute_waypoints()
+
         time.sleep(DT)
+
+    # Execute any remaining waypoints when stopping
+    execute_waypoints()
