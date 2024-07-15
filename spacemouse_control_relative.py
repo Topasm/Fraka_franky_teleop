@@ -8,40 +8,30 @@ import time
 MOVE_INCREMENT = 0.1
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
-DT = 0.01  # Loop interval in seconds
+DT = 0.001  # Loop interval in seconds
 
 # Initialize robot and gripper
 robot = franky.Robot("172.16.0.2")
 gripper = franky.Gripper("172.16.0.2")
 
 robot.relative_dynamics_factor = 0.1
-# robot.control_rate = 0.01  # Hz
 robot.recover_from_errors()
 
 
 def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
-    current_pose = robot.current_cartesian_state.pose
-    end_effector_pose = current_pose.end_effector_pose  # Access the end_effector_pose
-
-    # print("Current end effector pose:")
-    # print("Translation:", end_effector_pose.translation)
-    # # Extract translation and rotation from end_effector_pose
-    translation = np.array(end_effector_pose.translation)
-    rotation = np.array(end_effector_pose.quaternion)
-
-    new_translation = translation + np.array([dx, dy, dz])
+    translation = np.array([dx, -dy, -dz])
 
     if drot is not None:
-        current_rotation = R.from_quat(rotation)
-        delta_rotation = R.from_euler('xyz', drot)
-        new_rotation = (delta_rotation * current_rotation).as_quat()
+        delta_rotation = R.from_euler('xyz', drot).as_quat()
     else:
-        new_rotation = rotation
+        delta_rotation = R.identity().as_quat()
 
-    # Correctly format the translation and quaternion for Affine constructor
+    # Create the motion with relative reference type
     motion = franky.CartesianMotion(
-        franky.Affine(new_translation, new_rotation), franky.ReferenceType.Absolute)
-    robot.move(motion, asynchronous=True)
+        franky.Affine(translation, delta_rotation), franky.ReferenceType.Relative)
+    success = robot.move(motion, asynchronous=True)
+    if not success:
+        robot.recover_from_errors()
 
 
 def toggle_gripper_state():
@@ -102,6 +92,7 @@ with Spacemouse(deadzone=0.3) as sm:
         sm_state = sm.get_motion_state_transformed()
         dpos = sm_state[:3] * MOVE_INCREMENT
         drot_xyz = sm_state[3:] * MOVE_INCREMENT
+        drot_xyz = np.array([drot_xyz[0], -drot_xyz[1], -drot_xyz[2]])
 
         if sm.is_button_pressed(0):
             toggle_gripper_state()
