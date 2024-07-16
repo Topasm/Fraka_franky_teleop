@@ -3,35 +3,68 @@ import franky
 from scipy.spatial.transform import Rotation as R
 from spacemouse import Spacemouse
 import time
-
+from franky import Affine, RobotPose, CartesianWaypoint, CartesianWaypointMotion, JointWaypointMotion
+import hydra.utils
 # Constants
-MOVE_INCREMENT = 0.1
+MOVE_INCREMENT = 0.0002
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
-DT = 0.001  # Loop interval in seconds
+DT = 0.002  # [s]
 
 # Initialize robot and gripper
 robot = franky.Robot("172.16.0.2")
 gripper = franky.Gripper("172.16.0.2")
 
-robot.relative_dynamics_factor = 0.3
+robot.relative_dynamics_factor = 0.12
+robot.velocity_rel = 0.2
+robot.acceleration_rel = 0.1
+robot.jerk_rel = 0.01
 robot.recover_from_errors()
+
+# Get initial pose
+initial_pose = robot.current_cartesian_state.pose.end_effector_pose
+initial_translation = np.array(initial_pose.translation)
+initial_rotation = np.array(initial_pose.quaternion)
+
+# Current pose starts as initial pose
+current_translation = initial_translation.copy()
+current_rotation = initial_rotation.copy()
+
+waypoints = []
 
 
 def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
-    translation = np.array([dx, -dy, -dz])
+    global current_translation, current_rotation
+
+    # Update current translation and rotation
+    current_translation += np.array([dx, dy, dz])
 
     if drot is not None:
-        delta_rotation = R.from_euler('xyz', drot).as_quat()
-    else:
-        delta_rotation = R.identity().as_quat()
+        delta_rotation = R.from_euler('xyz', drot)
+        current_rotation = (
+            delta_rotation * R.from_quat(current_rotation)).as_quat()
 
-    # Create the motion with relative reference type
-    motion = franky.CartesianMotion(franky.RobotPose(franky.Affine(
-        translation, delta_rotation), elbow_position=0.0), franky.ReferenceType.Relative)
-    success = robot.move(motion, asynchronous=True)
-    if not success:
-        robot.recover_from_errors()
+    # Perform IK to get joint positions
+    target_pos = current_translation
+    target_orn = current_rotation
+    current_q = np.array(robot.read_once().q)  # Current joint positions
+    new_q = robot.ik_solver.inverse_kinematics(
+        target_pos, target_orn, current_q)
+
+    # Create and append the waypoint with the updated pose
+    waypoint = JointWaypointMotion([new_q], return_when_finished=False)
+    waypoints.append(waypoint)
+
+
+def execute_waypoints():
+    global waypoints
+    if waypoints:
+        # Execute JointWaypointMotion
+        motion = JointWaypointMotion(waypoints, return_when_finished=False)
+        success = robot.move(motion, asynchronous=True)
+        if not success:
+            robot.recover_from_errors()
+        waypoints = []  # Clear waypoints after execution
 
 
 def toggle_gripper_state():
@@ -92,7 +125,7 @@ with Spacemouse(deadzone=0.3) as sm:
         sm_state = sm.get_motion_state_transformed()
         dpos = sm_state[:3] * MOVE_INCREMENT
         drot_xyz = sm_state[3:] * MOVE_INCREMENT
-        drot_xyz = np.array([drot_xyz[0], -drot_xyz[1], -drot_xyz[2]])
+        print(f"Translation: {dpos}, Rotation: {drot_xyz}")
 
         if sm.is_button_pressed(0):
             toggle_gripper_state()
@@ -105,4 +138,11 @@ with Spacemouse(deadzone=0.3) as sm:
 
         move_robot(dpos[0], dpos[1], dpos[2], drot_xyz)
 
+        # Execute waypoints at a defined interval
+        if len(waypoints) >= 10:  # Adjust the threshold as needed
+            execute_waypoints()
+
         time.sleep(DT)
+
+    # Execute any remaining waypoints when stopping
+    execute_waypoints()

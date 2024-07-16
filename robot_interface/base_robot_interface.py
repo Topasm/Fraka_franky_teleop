@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 from scipy.spatial.transform.rotation import Rotation as R
 
-from robot_io.utils.utils import euler_to_quat
+from utils.utils import euler_to_quat
 
 
 # Enum's are not interpreted as numerical values automatically, as such
@@ -24,7 +24,8 @@ class GripperInterface:
         elif gs in (GripperState.OPEN, GripperState.CLOSED):
             return gs
         else:
-            raise ValueError(f"Invalid gripper state {gs} must be GripperState enum")
+            raise ValueError(
+                f"Invalid gripper state {gs} must be GripperState enum")
 
     @staticmethod
     def toggle(gs):
@@ -33,7 +34,8 @@ class GripperInterface:
         elif gs == GripperState.CLOSED:
             return GripperState.OPEN
         else:
-            raise ValueError(f"gripper state must be GripperState Enum was {gs}.")
+            raise ValueError(
+                f"gripper state must be GripperState Enum was {gs}.")
 
 
 class BaseRobotInterface:
@@ -209,7 +211,8 @@ class BaseRobotInterface:
             target_orn = euler_to_quat(target_orn)
         curr_pos, curr_orn = self.get_tcp_pos_orn()
         pos_error = np.linalg.norm(target_pos - curr_pos)
-        orn_error = np.linalg.norm((R.from_quat(target_orn) * R.from_quat(curr_orn).inv()).as_rotvec())
+        orn_error = np.linalg.norm(
+            (R.from_quat(target_orn) * R.from_quat(curr_orn).inv()).as_rotvec())
         return pos_error < cart_threshold and orn_error < orn_threshold
 
     def reached_joint_state(self, target_state, threshold=0.001):
@@ -240,9 +243,11 @@ class BaseRobotInterface:
         height = 30
         y = 10
         for i, (l, q, u) in enumerate(zip(self.ll, joint_states, self.ul)):
-            cv2.rectangle(canvas, [left, y], [right, y + height], [0, 0, 0], thickness=2)
+            cv2.rectangle(canvas, [left, y], [
+                          right, y + height], [0, 0, 0], thickness=2)
             bar_pos = int(left + width * (q - l) / (u - l))
-            cv2.line(canvas, [bar_pos, y], [bar_pos, y + height], thickness=5, color=[0, 0, 1])
+            cv2.line(canvas, [bar_pos, y], [bar_pos, y +
+                     height], thickness=5, color=[0, 0, 1])
             y += height + 10
         cv2.imshow("joint_positions", canvas)
         cv2.waitKey(1)

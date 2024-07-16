@@ -8,22 +8,17 @@ from franky import (
     ImpedanceMotion,
     JointMotion,
     JointWaypointMotion,
-    LinearMotion,
-    LinearRelativeMotion,
-    PathMotion,
-    Robot,
-    StopMotion,
-    Waypoint,
-    WaypointMotion,
+    Robot
+
 )
 from franky.gripper import Gripper
 import hydra.utils
 import numpy as np
 
-from robot_io.control.rel_action_control import RelActionControl
-from robot_io.robot_interface.base_robot_interface import BaseRobotInterface
-from robot_io.utils.franky_utils import to_affine
-from robot_io.utils.utils import get_git_root, pos_orn_to_matrix, ReferenceType
+from control.rel_action_control import RelActionControl
+from robot_interface.base_robot_interface import BaseRobotInterface
+from utils.franky_utils import to_affine
+from utils.utils import get_git_root, pos_orn_to_matrix, ReferenceType
 
 log = logging.getLogger(__name__)
 
