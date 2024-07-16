@@ -5,6 +5,8 @@ from spacemouse import Spacemouse
 import time
 from franky import Affine, RobotPose, CartesianWaypoint, CartesianWaypointMotion, JointWaypointMotion
 import hydra.utils
+from ik.ik_frankx import IKFrankY
+
 # Constants
 MOVE_INCREMENT = 0.0002
 SPEED = 0.05  # [m/s]
@@ -31,6 +33,7 @@ current_translation = initial_translation.copy()
 current_rotation = initial_rotation.copy()
 
 waypoints = []
+ik = IKFrankY
 
 
 def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
@@ -47,9 +50,8 @@ def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
     # Perform IK to get joint positions
     target_pos = current_translation
     target_orn = current_rotation
-    current_q = np.array(robot.read_once().q)  # Current joint positions
-    new_q = robot.ik_solver.inverse_kinematics(
-        target_pos, target_orn, current_q)
+    current_q = np.array(robot.state.q)  # Current joint positions
+    new_q = ik.inverse_kinematics(ik, target_pos, target_orn, current_q)
 
     # Create and append the waypoint with the updated pose
     waypoint = JointWaypointMotion([new_q], return_when_finished=False)
@@ -61,10 +63,11 @@ def execute_waypoints():
     if waypoints:
         # Execute JointWaypointMotion
         motion = JointWaypointMotion(waypoints, return_when_finished=False)
-        success = robot.move(motion, asynchronous=True)
-        if not success:
-            robot.recover_from_errors()
-        waypoints = []  # Clear waypoints after execution
+        print("Executing waypoints", motion)
+        # success = robot.move(motion, asynchronous=True)
+        # if not success:
+        #     robot.recover_from_errors()
+        # waypoints = []  # Clear waypoints after execution
 
 
 def toggle_gripper_state():
