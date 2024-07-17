@@ -5,7 +5,7 @@ from spacemouse import Spacemouse
 import time
 
 # Constants
-MOVE_INCREMENT = 0.1
+MOVE_INCREMENT = 0.001
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
 DT = 0.001  # Loop interval in seconds
@@ -29,7 +29,7 @@ def move_robot(dx=0.0, dy=0.0, dz=0.0, drot=None):
     # Create the motion with relative reference type
     motion = franky.CartesianMotion(franky.RobotPose(franky.Affine(
         translation, delta_rotation), elbow_position=0.0), franky.ReferenceType.Relative)
-    success = robot.move(motion, asynchronous=True)
+    success = robot.move(motion, asynchronous=False)
     if not success:
         robot.recover_from_errors()
 
@@ -89,6 +89,8 @@ print("Press button 1 to grasp an object and button 2 to release.")
 with Spacemouse(deadzone=0.3) as sm:
     running = True
     while running:
+        start_time = time.time()
+
         sm_state = sm.get_motion_state_transformed()
         dpos = sm_state[:3] * MOVE_INCREMENT
         drot_xyz = sm_state[3:] * MOVE_INCREMENT
@@ -104,5 +106,10 @@ with Spacemouse(deadzone=0.3) as sm:
             release_object()
 
         move_robot(dpos[0], dpos[1], dpos[2], drot_xyz)
+
+        end_time = time.time()
+        loop_duration = end_time - start_time
+        loop_frequency = 1.0 / loop_duration
+        print(f"Loop frequency: {loop_frequency:.2f} Hz")
 
         time.sleep(DT)
