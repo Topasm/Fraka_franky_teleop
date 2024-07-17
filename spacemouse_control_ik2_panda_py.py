@@ -4,6 +4,9 @@ import panda_py.controllers
 from scipy.spatial.transform import Rotation as R
 import panda_py
 from spacemouse import Spacemouse
+from spatialmath import *
+import roboticstoolbox as rtb
+
 
 # Constants
 MOVE_INCREMENT = 0.0001
@@ -23,13 +26,34 @@ robot.recover()
 robot.move_to_start()
 current_translation = robot.get_position()
 current_rotation = robot.get_orientation()
+defaultq = robot.q
+
+print("Initial pose:", defaultq)
+
+
+panda_rtb = rtb.models.Panda()
+
+T_F_EE: SE3 = SE3(0, 0, 0.1034) * SE3.Rz(
+    -45, unit="deg"
+)
 
 
 def compute_inverse_kinematics(translation, rotation):
     pose = np.eye(4)
     pose[:3, :3] = R.from_quat(rotation).as_matrix()
     pose[:3, 3] = translation
-    return panda_py.ik(pose)
+    # print("pose", pose)
+
+    # print("translation", translation)
+    # print("rotation", rotation)
+    Tep = SE3.Trans(translation) * UnitQuaternion(pose[:3, :3]).SE3()
+    print("Tep", Tep)
+    Tep = Tep * T_F_EE
+    q = panda_rtb.ik_LM(Tep, q0=defaultq, method='chan')
+    print("q", q)
+    q2 = panda_py.ik(pose)
+    print("q2", q2)
+    return q2
 
 
 def main():
@@ -99,7 +123,7 @@ def main():
             end_time = time.perf_counter()
             loop_duration = end_time - start_time
             loop_frequency = 1.0 / loop_duration
-            print(f"Loop frequency: {loop_frequency:.2f} Hz")
+            # print(f"Loop frequency: {loop_frequency:.2f} Hz")
 
 
 if __name__ == "__main__":
