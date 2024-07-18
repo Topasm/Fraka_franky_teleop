@@ -9,7 +9,7 @@ import roboticstoolbox as rtb
 
 
 # Constants
-MOVE_INCREMENT = 0.0001
+MOVE_INCREMENT = 0.0003
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
 
@@ -42,17 +42,7 @@ def compute_inverse_kinematics(translation, rotation):
     pose = np.eye(4)
     pose[:3, :3] = R.from_quat(rotation).as_matrix()
     pose[:3, 3] = translation
-    # print("pose", pose)
 
-    # print("translation", translation)
-    # print("rotation", rotation)
-    Tep = SE3.Trans(translation) * UnitQuaternion(pose[:3, :3]).SE3()
-    print("Tep", Tep)
-    Tep = Tep * T_F_EE
-    q = panda_rtb.ik_LM(Tep, q0=defaultq, method='chan')
-    print("q", q)
-    q2 = panda_py.ik(pose)
-    print("q2", q2)
     return q2
 
 
@@ -63,15 +53,13 @@ def main():
 
     with Spacemouse(deadzone=0.3) as sm, robot.create_context(frequency=1000) as ctx:
         running = True
-        stiffness = [600, 600, 600, 600, 250, 150, 50]
 
         sm_state = sm.get_motion_state_transformed()
         dpos = sm_state[:3] * MOVE_INCREMENT
-        drot_xyz = sm_state[3:] * MOVE_INCREMENT*3
+        drot_xyz = sm_state[3:] * MOVE_INCREMENT
         drot_xyz = np.array([drot_xyz[0], drot_xyz[1], drot_xyz[2]])
 
-        controller = panda_py.controllers.JointPosition(
-            stiffness=stiffness)
+        controller = panda_py.controllers.CartesianImpedance()
         robot.start_controller(controller)
         time.sleep(1)
 
@@ -80,7 +68,7 @@ def main():
 
             sm_state = sm.get_motion_state_transformed()
             dpos = sm_state[:3] * MOVE_INCREMENT
-            drot_xyz = sm_state[3:] * MOVE_INCREMENT
+            drot_xyz = sm_state[3:] * MOVE_INCREMENT*3
             drot_xyz = np.array([drot_xyz[0], drot_xyz[1], drot_xyz[2]])
 
             # Update current pose
@@ -93,8 +81,8 @@ def main():
                     delta_rotation * R.from_quat(current_rotation)).as_quat()
 
             # Compute inverse kinematics and move robot
-            new_q = compute_inverse_kinematics(
-                current_translation, current_rotation)
+            # new_q = compute_inverse_kinematics(
+            #     current_translation, current_rotation)
 
             # Handle gripper state changes
             if sm.is_button_pressed(0):
@@ -118,7 +106,7 @@ def main():
                     print("Release successful")
                 else:
                     print("Release failed")
-            controller.set_control(new_q)
+            controller.set_control(current_translation, current_rotation)
             # Sleep to maintain loop frequency of 1000 Hz
             end_time = time.perf_counter()
             loop_duration = end_time - start_time
