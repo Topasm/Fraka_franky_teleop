@@ -37,7 +37,7 @@ def main():
     print("Press button 0 to toggle gripper state (open/close).")
     print("Press button 1 to grasp an object and button 2 to release.")
 
-    with Spacemouse(deadzone=0.3) as sm, robot.create_context(frequency=1000) as ctx:
+    with Spacemouse(deadzone=0.3) as sm, robot.create_context(frequency=500) as ctx:
         running = True
         stiffness = [600, 600, 600, 600, 250, 150, 50]
 
@@ -46,8 +46,7 @@ def main():
         drot_xyz = sm_state[3:] * MOVE_INCREMENT*3
         drot_xyz = np.array([drot_xyz[0], drot_xyz[1], drot_xyz[2]])
 
-        controller = panda_py.controllers.JointPosition(
-            stiffness=stiffness)
+        controller = panda_py.controllers.JointPosition()
         robot.start_controller(controller)
         time.sleep(1)
 

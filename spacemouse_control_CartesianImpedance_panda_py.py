@@ -1,3 +1,4 @@
+
 import numpy as np
 import time
 import panda_py.controllers
@@ -6,10 +7,10 @@ import panda_py
 from spacemouse import Spacemouse
 from spatialmath import *
 import roboticstoolbox as rtb
-
+import threading
 
 # Constants
-MOVE_INCREMENT = 0.0003
+MOVE_INCREMENT = 0.0002
 SPEED = 0.05  # [m/s]
 FORCE = 20.0  # [N]
 
@@ -19,11 +20,13 @@ hostname = '172.16.0.2'
 robot = panda_py.Panda(hostname)
 gripper = panda_py.libfranka.Gripper(hostname)
 
+
 robot.recover()
 
 # Get initial pose
 
 robot.move_to_start()
+gripper.homing()
 current_translation = robot.get_position()
 current_rotation = robot.get_orientation()
 defaultq = robot.q
@@ -32,18 +35,6 @@ print("Initial pose:", defaultq)
 
 
 panda_rtb = rtb.models.Panda()
-
-T_F_EE: SE3 = SE3(0, 0, 0.1034) * SE3.Rz(
-    -45, unit="deg"
-)
-
-
-def compute_inverse_kinematics(translation, rotation):
-    pose = np.eye(4)
-    pose[:3, :3] = R.from_quat(rotation).as_matrix()
-    pose[:3, 3] = translation
-
-    return q2
 
 
 def main():
@@ -80,32 +71,24 @@ def main():
                 current_rotation = (
                     delta_rotation * R.from_quat(current_rotation)).as_quat()
 
-            # Compute inverse kinematics and move robot
-            # new_q = compute_inverse_kinematics(
-            #     current_translation, current_rotation)
+            # print("state", robot.get_state().q)
 
             # Handle gripper state changes
             if sm.is_button_pressed(0):
-                current_width = gripper.get_gripper_width()
-                if current_width > 0.01:  # Assuming gripper is open if width > 1cm
-                    gripper.move(0.0, speed=SPEED)  # Close the gripper
-                else:
-                    gripper.open(speed=SPEED)  # Open the gripper
-
-            elif sm.is_button_pressed(1):
-                success = gripper.grasp(0.0, speed=SPEED, force=FORCE,
-                                        epsilon_inner=0.005, epsilon_outer=1.0)
+                success = gripper.grasp(0.01, speed=SPEED, force=FORCE,
+                                        epsilon_inner=0.005, epsilon_outer=0.005)
                 if success:
                     print("Grasp successful")
                 else:
                     print("Grasp failed")
 
-            elif sm.is_button_pressed(2):
-                success = gripper.open(speed=SPEED)
+            elif sm.is_button_pressed(1):
+                success = gripper.move(0.08, speed=SPEED)
                 if success:
                     print("Release successful")
                 else:
                     print("Release failed")
+
             controller.set_control(current_translation, current_rotation)
             # Sleep to maintain loop frequency of 1000 Hz
             end_time = time.perf_counter()
